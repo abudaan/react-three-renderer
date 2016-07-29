@@ -10,7 +10,7 @@ import PropTypes from 'react/lib/ReactPropTypes';
 import propTypeInstanceOf from '../../utils/propTypeInstanceOf';
 
 @resource
-class MaterialDescriptorBase extends THREEElementDescriptor {
+class MultiMaterialDescriptorBase extends THREEElementDescriptor {
   constructor(react3Instance) {
     super(react3Instance);
 
@@ -27,102 +27,38 @@ class MaterialDescriptorBase extends THREEElementDescriptor {
       default: 'material',
     });
 
-    this.hasProp('transparent', {
-      type: PropTypes.bool,
-      simple: true,
-    });
-
-    this.hasProp('alphaTest', {
-      type: PropTypes.number,
+    this.hasProp('materials', {
+      type: PropTypes.array,
       updateInitial: true,
-      update: (threeObject, alphaTest) => {
-        threeObject.alphaTest = alphaTest;
+      update: (threeObject, materials) => {
+        // console.log('update', materials);
+        this._materials = [...materials]
+        threeObject.materials = materials;
         threeObject.needsUpdate = true;
       },
-      default: 0,
+      default: [],
     });
 
-    this.hasProp('side', {
-      type: PropTypes.oneOf([THREE.FrontSide, THREE.BackSide, THREE.DoubleSide]),
-      updateInitial: true,
-      update: (threeObject, side) => {
-        threeObject.side = side;
-      },
-      default: THREE.FrontSide,
-    });
-
-    this.hasProp('opacity', {
-      type: PropTypes.number,
-      simple: true,
-    });
-
-    this.hasProp('visible', {
-      type: PropTypes.bool,
-      simple: true,
-      default: true,
-    });
-
-    this._colors = [];
+    this._materials = [];
   }
 
   getMaterialDescription(props) {
     const materialDescription = {};
 
-    this._colors.forEach(colorPropName => {
-      if (props.hasOwnProperty(colorPropName)) {
-        materialDescription[colorPropName] = props[colorPropName];
-      }
-    });
-
-    if (props.hasOwnProperty('side')) {
-      materialDescription.side = props.side;
+    if (props.hasOwnProperty('materials')) {
+      materialDescription.materials = props.materials;
     }
 
     return materialDescription;
   }
 
-  hasColor(propName = 'color', defaultVal = 0xffffff) {
-    if (process.env.NODE_ENV !== 'production') {
-      invariant(this._colors.indexOf(propName) === -1,
-        'This color is already defined for %s.',
-        this.constructor.name);
-    }
-
-    this._colors.push(propName);
-
-    this.hasProp(propName, {
-      type: PropTypes.oneOfType([
-        propTypeInstanceOf(THREE.Color),
-        PropTypes.number,
-        PropTypes.string,
-      ]),
-      update: (threeObject, value) => {
-        threeObject[propName].set(value);
-      },
-      default: defaultVal,
-    });
-  }
-
-  hasWireframe() {
-    this.hasProp('wireframe', {
-      type: PropTypes.bool,
-      simple: true,
-      default: false,
-    });
-
-    this.hasProp('wireframeLinewidth', {
-      type: PropTypes.number,
-      simple: true,
-      default: 1,
-    });
-  }
 
   hasMaterials() {
-    this.hasProp('material', {
+    this.hasProp('materials', {
       type: PropTypes.array,
       updateInitial: true,
-      update: (threeObject, material) => {
-        threeObject.material = material;
+      update: (threeObject, materials) => {
+        threeObject.materials = materials;
       },
       default: [],
     });
@@ -137,42 +73,49 @@ class MaterialDescriptorBase extends THREEElementDescriptor {
       ...threeObject.userData,
     };
 
+    // console.log(threeObject.userData)
+
     super.applyInitialProps(threeObject, props);
   }
 
   setParent(material, parentObject3D) {
+    // console.log('parentObject3D', parentObject3D)
     invariant(parentObject3D instanceof THREE.Mesh
       || parentObject3D instanceof THREE.Points
       || parentObject3D instanceof THREE.Sprite
       || parentObject3D instanceof THREE.Line, 'Parent is not a mesh');
+
     invariant(parentObject3D[material.userData._materialSlot] === undefined
       || parentObject3D[material.userData._materialSlot] === null,
       `Parent already has a ${material.userData._materialSlot} defined`);
+
     super.setParent(material, parentObject3D);
 
+    // console.log(parentObject3D, material.userData._materialSlot, material)
     parentObject3D[material.userData._materialSlot] = material;
   }
 
-  unmount(material) {
-    const parent = material.userData.markup.parentMarkup.threeObject;
+  unmount(multimaterial) {
+    const parent = multimaterial.userData.markup.parentMarkup.threeObject;
 
     // could either be a resource description or an actual material
     if (parent instanceof THREE.Mesh ||
       parent instanceof THREE.Sprite ||
       parent instanceof THREE.Line ||
       parent instanceof THREE.Points) {
-      const slot = material.userData._materialSlot;
+      const slot = multimaterial.userData._materialSlot;
 
-      if (parent[slot] === material) {
+      if (parent[slot] === multimaterial) {
         // TODO: set material slot to null rather than undefined
 
         parent[slot] = undefined;
       }
     }
-
-    material.dispose();
-
-    super.unmount(material);
+    multimaterial.materials.forEach(material => {
+      // console.log(material);
+      material.dispose();
+    });
+    super.unmount(multimaterial);
   }
 
   highlight(threeObject) {
@@ -239,4 +182,4 @@ class MaterialDescriptorBase extends THREEElementDescriptor {
   _invalidChild = child => this.invalidChildInternal(child);
 }
 
-module.exports = MaterialDescriptorBase;
+module.exports = MultiMaterialDescriptorBase;
